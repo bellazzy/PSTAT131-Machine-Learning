@@ -1,0 +1,230 @@
+---
+title: "PSTAT131 HW3"
+author: "Zhongyun Zhang"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#install.packages("tidyverse")
+#install.packages("ROCR")
+#install.packages("tree")
+#install.packages("maptree")
+#install.packages("ggridges")
+#install.packages("superheat")
+library(tidyverse) 
+library(ROCR) 
+library(tree) 
+library(maptree) 
+library(class) 
+library(lattice) 
+library(ggridges) 
+library(superheat)
+drug_use <- read_csv('drug.csv',
+col_names = c('ID','Age','Gender','Education','Country','Ethnicity', 
+              'Nscore','Escore','Oscore','Ascore','Cscore','Impulsive',
+              'SS','Alcohol','Amphet','Amyl','Benzos','Caff','Cannabis',
+            'Choc','Coke','Crack','Ecstasy','Heroin','Ketamine',
+            'Legalh','LSD','Meth','Mushrooms','Nicotine','Semer','VSA'))
+```
+
+##Problem1
+
+#a
+```{r}
+drug_use <- drug_use %>% 
+  mutate_at(as.ordered, .vars=vars(Alcohol:VSA)) 
+drug_use <- drug_use %>% 
+  mutate(Gender = factor(Gender, labels=c("Male", "Female"))) %>% 
+  mutate(Ethnicity = factor(Ethnicity, labels=c("Black", "Asian",
+                                                "White",
+                                                "Mixed:White/Black",
+                                                "Other",
+                                                "Mixed:White/Asian",
+                                                "Mixed:Black/Asian"))) %>%
+  mutate(Country = factor(Country, labels=c("Australia", "Canada", 
+                                            "New Zealand", "Other",
+                                            "Ireland", "UK", "USA")))
+```
+
+```{r}
+recent_cannabis <- drug_use %>% mutate(recent_cannabis_use=factor(ifelse(Cannabis>="CL3",
+                                                                         "Yes","No"),
+                                                            levels=c("No","Yes")))
+```
+
+#b
+```{r}
+drug_use_subset <- recent_cannabis %>% 
+  select(Age:SS, recent_cannabis_use)
+set.seed(1)
+train = sample(row(drug_use_subset),1500)
+drug_use_train = drug_use_subset[train,]
+drug_use_test= drug_use_subset[-train,]
+set.seed(2)
+dim(drug_use_train) 
+dim(drug_use_test)
+```
+
+#c
+```{r}
+drug.glm = glm(recent_cannabis_use~.,data = drug_use_train,family = binomial)
+summary(drug.glm)
+```
+
+##Problem2
+#a)
+```{r}
+nfold = 10
+set.seed(11)
+folds = seq.int(nrow(drug_use_train)) %>% cut(breaks = nfold, label = FALSE) %>% sample
+#set.seed(12)
+tree_parameters = tree.control(nobs=nrow(drug_use_train), minsize=10, mindev=1e-3)
+#set.seed(13)
+drugtree=tree(drug_use_train$recent_cannabis_use~.,data=drug_use_train)
+cv_tree <- cv.tree(drugtree, rand = folds, FUN = prune.misclass, K = 10) 
+cv_tree
+best.size.cv= cv_tree$size[which.min(cv_tree$dev)]
+best.size.cv
+```
+The size is 6 which minimize the cross validation error.
+
+#b)
+```{r}
+tree.pruned <- prune.tree(drugtree, best = best.size.cv)
+draw.tree(tree.pruned, nodeinfo = TRUE, cex = 0.5)
+```
+
+The first split on is Country in this decision tree.
+
+#c
+```{r}
+truth <- drug_use_test$recent_cannabis_use
+pred.test <- predict(tree.pruned, drug_use_test, type = "class")
+table(truth, pred.test)
+tpr=346/(108+346)
+tpr
+fpr=80/(80+288)
+fpr
+```
+
+
+##Problem3
+
+#a
+```{r}
+#for logistic
+drugtest.glm = glm(recent_cannabis_use~.,data = drug_use_test,family = binomial)
+prob.testing = predict(drugtest.glm,drug_use_test, type = "response")
+#round(prob.training, digits = 2)
+pred.glm = prediction(prob.testing, drug_use_test$recent_cannabis_use) 
+perf.glm = performance(pred.glm, measure = "tpr", x.measure = "fpr")
+plot(perf.glm, col="Red", lwd=3, main="ROC curve") 
+abline(0,1)
+#tpr = performance(pred.glm, "tpr")@y.values[[1]]
+#fpr = performance(pred.glm, "fpr")@y.values[[1]]
+#plot(fpr, tpr, type="l", col=3, lwd=3, main="ROC curve") 
+#abline(0,1)
+
+#for tree
+prob.testing2 = predict(tree.pruned,drug_use_test, type = "vector")
+#round(prob.training, digits = 2)
+drug_use_test = drug_use_test %>% mutate(Probability = prob.testing2)
+pred.tree = prediction(prob.testing2[,2],drug_use_test$recent_cannabis_use)
+perf.tree = performance(pred.tree, measure = "tpr", x.measure = "fpr")
+plot(perf.tree, col="Blue", lwd=3, main="ROC curve", add = TRUE)
+abline(0,1)
+legend(0.6,0.3, legend = c("Logistic","Tree"),col = c("Red","Blue"),lty = 1)
+```
+
+#b
+```{r}
+#logistic
+auc.logistic = performance(pred.glm, "auc")@y.values 
+auc.logistic
+auc.tree = performance(pred.tree, "auc")@y.values 
+auc.tree
+```
+Logistic regression has higher AUC.
+
+##Problem4
+
+#a
+```{r warning=FALSE}
+leukemia_data <- read_csv("leukemia_data.csv")
+```
+```{r}
+leukemia_data2 <- leukemia_data  %>% mutate(Type=as.factor(Type))
+table(leukemia_data2$Type)
+```
+BCR-ABL occurs the least in this data.
+
+#b
+```{r}
+leukemia_data3 <- leukemia_data2 %>% select(-Type)
+pve <- prcomp(leukemia_data3, scale=TRUE, center=TRUE)
+sdev<-pve$sdev
+pve2 <- sdev^2 / sum(sdev^2)
+cumulative_pve <- cumsum(pve2)
+## This will put the next two plots side by side 
+par(mfrow=c(1, 2))
+## Plot proportion of variance explained 
+plot(pve2, type = "l", lwd = 3)
+plot(cumulative_pve, type="l",  lwd = 3)
+# xlab = "Principal Component", ylab = "Cumulative PVE",
+```
+
+#c
+```{r}
+new_records <- pve$x[, 1:2]
+rainbow_colors <- rainbow(7)
+plot_colors <- rainbow_colors[leukemia_data2$Type]
+plot(new_records, cex = 0)
+text(-new_records, col = plot_colors, labels = leukemia_data2$Type, cex = 0.6)
+new_records <- abs(pve$rotation[,1])
+new_records <- sort(new_records, decreasing = TRUE)
+head(new_records)
+```
+T-tall is most clearly separated from the others along the PC1 axis. SEMA3F has the highest absolute loading for PC1.
+
+#f
+```{r}
+leukemia_subset <- leukemia_data2 %>% filter(Type=="TEL-AML1"| Type=="T-ALL"|Type=="Hyperdip50")
+
+#leukemia_subset2 <- leukemia_subset %>% select(-Type)
+
+dist.eu = dist(leukemia_subset, method = "euclidean", diag = TRUE)
+#hierarchical clustering
+ed.dist = dist(leukemia_subset)
+set.seed(68)
+ed.hclust = hclust(ed.dist)
+#dendogram
+#install.packages("dendextend")
+library(dendextend)
+dend1 = as.dendrogram(ed.hclust)
+dend1 = color_branches(dend1, k=3)
+dend1 = color_labels(dend1, k=3)
+dend1 = set(dend1, "labels_cex", 0.3)
+debd1 = set_labels(dend1, labels = leukemia_subset$Type[order.dendrogram(dend1)])
+plot(dend1, horiz = T, main = "Dendrogram colored by three clusters")
+```
+
+```{r}
+dend2 = as.dendrogram(ed.hclust)
+dend2 = color_branches(dend2, k=5)
+dend2 = color_labels(dend2, k=5)
+dend2 = set(dend2, "labels_cex", 0.3)
+debd2 = set_labels(dend2, labels = leukemia_subset$Type[order.dendrogram(dend2)])
+plot(dend2, horiz = T, main = "Dendrogram colored by five clusters")
+```
+
+
+
+
+

@@ -1,0 +1,313 @@
+---
+title: "131hw4"
+author: "Le Song, Zhongyun Zhang"
+date: "2020/12/9"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE}
+#install.packages("tidyverse")
+#install.packages("tree")
+#install.packages("randomForest")
+#install.packages("gbm")
+#install.packages("ROCR")
+#install.packages("e1071")
+#install.packages("imager")
+library(tidyverse) 
+library(tree) 
+library(randomForest) 
+library(gbm) 
+library(ROCR) 
+library(e1071) 
+library(imager)
+```
+## Problem1
+#a
+$$ P ( j \notin S) =  \bigg(\frac {n-1}{n} \bigg) ^n $$ 
+Where P is the Population and $ S $ is the sample of size $ n $
+#b
+Plugging in $ n = 1000 $ to our equation above.
+$$ P ( j \notin S) =  \bigg(\frac {999}{1000} \bigg) ^{1000}  =  0.3676954.$$ 
+
+```{r}
+n = 1000
+pn.boot <- (((n-1)/n)^n)
+pn.boot
+```
+
+#c
+```{r}
+num = 0
+for(i in 1:999)
+{
+  resample <- sample(1:1000, replace = T)
+  unique.r <- length(unique(resample))
+  j = (1000-unique.r)/1000
+  num = num + j
+}
+result = num/999
+print(paste("The mean of 999 trials is",result))
+```
+
+As we can see from the calculation, the actual probability is really close to the probability we got in part(b).
+
+#d
+```{r}
+fg <- c(rep.int(1, 62), rep.int(0,64))
+sum(fg == 1)/length(fg)
+#Mean
+#x <- c()
+x <- vector()
+for(i in 1:1000){ 
+ boot.sample <- sample(fg, replace=TRUE)
+ x[i] <- mean(boot.sample)
+}
+#Histogram
+hist(x, breaks = 30, col = 'blue', main = "Histogram of Bootstrap Field Goal %", xlab = "Field Goal %")
+quantile(x, c(0.025,0.975))
+```
+I would say the rate will be lower than the beginning of the season, the confidence interval is (0.4047619 0.5795635). According to the regression to mean, "arises if a sample point of a random variable is extreme  a future point will be closer to the mean or average on further measurements." Therefore, his end-of-season field goal percentage will in fact be lower than his percentage on 11/19, and get back to his original rate of shooting.
+
+## Problem2
+#a
+```{r}
+load("faces_array.RData")
+face_mat <- sapply(1:1000, function(i) as.numeric(faces_array[, , i])) %>% t
+plot_face <- function(image_vector) { 
+  plot(as.cimg(t(matrix(image_vector, ncol=100))), axes=FALSE, asp=1)
+}
+```
+
+```{r}
+average = colMeans(face_mat)
+plot_face(average)
+```
+#b
+```{r}
+pr.out = prcomp(face_mat, scale=FALSE, center=TRUE) 
+```
+
+```{r}
+pr.var = pr.out$sdev^2
+pve = pr.var/sum(pr.var)
+plot(pve, xlab = "Principle Component", ylab="Proportion of Variance
+     Explained", ylim = c(0,1), type = 'b')
+plot(cumsum(pve), xlab = "Principle Component", ylab="Cumulative
+     Proportion of Variance Explained", ylim = c(0,1), type = 'b')
+min(which(cumsum(pve) > .5))
+```
+We need 5 PCs to explain at least 50% of the total variation in the face images.
+
+#c
+```{r}
+par(mfrow=c(4,4),mar=c(1,1,1,1))
+for (i in 1:16) {
+  plot_face(pr.out$rotation[,i])
+}
+```
+
+#d
+```{r}
+pc1.face<-face_mat[order(pr.out$x[,1]),]
+par(mfrow=c(2,5),mar=c(1,1,1,1))
+for (i in 1:5)
+  plot_face(pc1.face[i,])
+for (i in 996:1000)
+  plot_face(pc1.face[i,])
+```
+As we can see from these graph, faces with high values for pc1 will have dark background. For lower value for pc1 will have lighter background.
+
+#e
+```{r}
+pc5.face<-face_mat[order(pr.out$x[,5]),]
+par(mfrow=c(2,5),mar=c(1,1,1,1))
+for (i in 1:5)
+  plot_face(pc5.face[i,])
+for (i in 996:1000)
+  plot_face(pc5.face[i,])
+```
+As we can see from graph, with high value of pc5, people have shorter hair. For low value of pc5, people tend to have longer hair. For me, pc5 seems to be more useful, since it can distinguish length of hair for people, which may be a helpful feature in face recognition model.
+
+## Problem3
+#a
+```{r}
+nonlinear <- read_csv('nonlinear.csv')
+ggplot(nonlinear,aes(X1,X2,colour = Y)) + geom_point()
+```
+
+#b
+```{r}
+#grid of points over sample space
+gr <- expand.grid(X1=seq(-5, 5, by=0.1), # sample points in X1
+X2=seq(-5, 5, by=0.1)) # sample points in X2
+glm.fit <- glm(Y ~X1+X2, family= binomial, data= nonlinear)
+glm.predict <- predict(glm.fit, gr, type = "response")
+nonlin.y <- as.factor(ifelse(glm.predict <= .5, 0, 1)) 
+
+ggplot(gr, aes(X1,X2))+geom_raster(aes(fill=nonlin.y),alpha=0.5)+
+  geom_point(aes(X1,X2,color = Y), data = nonlinear)
+
+```
+
+#c
+```{r}
+fit2 <- glm(Y~ poly(X1,degree = 2) + poly(X2,degree = 2) + X1*X2, data = nonlinear, family = binomial)
+predict2 <- predict(fit2, gr, type = "response")
+nonlin.y2 <- as.factor(ifelse(predict2 <= 0.5, 0, 1))
+ggplot(gr, aes(X1, X2))+geom_raster(aes(fill=nonlin.y2), alpha=0.5) + geom_point(aes(X1,X2,color = Y), data = nonlinear)
+summary(fit2)
+```
+
+#d
+```{r}
+fit3 <- glm(Y~ poly(X1, degree = 5) + poly(X2, degree = 5), data = nonlinear, family = binomial)
+predict3 <- predict(fit3, gr, type = "response")
+nonlin.y3 <- as.factor(ifelse(predict3 <= 0.5, 0, 1))
+ggplot(gr, aes(X1, X2))+geom_raster(aes(fill=nonlin.y3), alpha=0.5) + 
+  geom_point(aes(X1,X2, color = Y), data = nonlinear)
+summary(fit3)
+```
+From the graph we can see that with polynomial with degree of 5, it did have a decision boundary around true separation. However, on the top left of the graph, there is a boundary with no point in it. It means to be classified as NULL. we did not put any interaction points, so the graph may not able to determine what to do. It may have a high variability.
+
+#e
+Qualitatively, compare the relative magnitudes of coefficient of in the two polynomial models and the linear model, we can see that coefficients among higher-order polynomial has larger magnitude, which is 5th order polynomial. I believe these may because of the bias and variance trade-off. At some place, the model will fit the data well. For example, first-degree polynomial model, it is simply a line, which may be underfitting. For fifth-degree polynomial model, it may result in high variance, low bias and overfitting. 
+
+#f
+
+```{r}
+set.seed(1)
+par(mfrow = c(2,3))
+boot <- replicate(3, nonlinear[sample(1:nrow(nonlinear), replace = TRUE),])
+for(i in 1:3){
+  df <- as.data.frame(boot[, i])
+  boot.glm <- glm(Y~X1+X2, data = df, family = binomial)
+#get estimates
+prob <- predict(boot.glm, newdata = gr, type = "response") 
+gr <- gr %>% mutate(gr.c = as.factor(ifelse(prob <= .5, 0, 1)))
+print(ggplot(data = gr, aes(X1, X2 ))+geom_raster(aes(fill = gr.c), alpha = .5)+ 
+        geom_point(aes(color = Y), data = df))
+}
+#5th order polynomial
+for(i in 1:3){
+  df <- as.data.frame(boot[,i])
+  boot5 <- glm(Y~poly(X1, 5, raw = TRUE)+poly(X2, 5, raw = TRUE),
+               data = df, family = binomial)
+  #get estimates
+est_prob <- predict(boot5, newdata = gr, type = "response") 
+gr <- gr %>% mutate(gr.c = as.factor(ifelse(prob <= .5, 0, 1)))
+print(ggplot(data = gr, aes(X1, X2))+geom_raster(aes(fill = gr.c), alpha = .5)+ 
+        geom_point(aes(color = Y), data = df))
+}
+```
+As we can see from the graph, the variance decrease as the polynomial degree increase. For linear model, it has more variation.
+
+##Problem4
+#a
+```{r}
+#install.packages("ISLR")
+library(ISLR)
+```
+
+```{r}
+train <- Caravan[1:1000, ]
+test <- Caravan[-(1:1000), ]
+```
+
+#b
+```{r}
+set.seed(1)
+boost.train = gbm(ifelse(Purchase == "Yes",1,0)~., data = train, distribution = "bernoulli", n.trees = 1000, shrinkage = 0.01, interaction.depth = 4)
+summary(boost.train)
+```
+
+PPERSUAT, MOPLHOOG, MGODGE are three most important predictors.
+
+#c
+```{r}
+bag.train = randomForest(Purchase~.,data = train, importance = TRUE)
+bag.train
+```
+
+The out of bag estimate of error rate is 6.2%. The default number of trees are 500. The number of variables tried at each split is 9.
+
+```{r}
+importance(bag.train)
+varImpPlot(bag.train, sort = T, main = "Variable Importance for random forest", n.var = 5)
+```
+
+The order of important variables differ for boosting and random forest models.
+
+#d
+```{r}
+#boosting
+yhat.boost = predict(boost.train, newdata = test, type="response")
+yhat.boostprob = as.factor(ifelse(yhat.boost>=0.2, "Yes", "No"))
+boost.err = table(predicted = yhat.boostprob, truth = test$Purchase)
+test.boost.err = 1 - sum(diag(boost.err))/sum(boost.err)
+test.boost.err
+boost.err
+#bagging
+yhat.rf = predict(bag.train, newdata = test, type = "prob")
+yhat.rfprob = as.factor(ifelse(yhat.rf[,"Yes"]>=0.2, "Yes", "No"))
+bag.err = table(predicted = yhat.rfprob, truth = test$Purchase)
+test.bag.err = 1 - sum(diag(bag.err))/sum(bag.err)
+test.bag.err
+bag.err
+```
+
+In the random forest model, 10.3% of the people predicted to make a purchase do in fact make one. 
+
+##Problem5
+#a
+```{r warning=FALSE}
+drug_use <- read_csv('drug.csv',
+col_names = c('ID','Age','Gender','Education','Country','Ethnicity',
+'Nscore','Escore','Oscore','Ascore','Cscore','Impulsive',
+'SS','Alcohol','Amphet','Amyl','Benzos','Caff','Cannabis',
+'Choc','Coke','Crack','Ecstasy','Heroin','Ketamine','Legalh','LSD',
+'Meth', 'Mushrooms', 'Nicotine', 'Semer','VSA'))
+drug_use <- drug_use %>% mutate(recent_cannabis_use = factor(ifelse(Cannabis >= "CL3", "Yes", "No"), levels = c("No", "Yes")))
+```
+
+
+```{r}
+drug_use_subset <- drug_use %>% select(Age:SS,recent_cannabis_use)
+set.seed(1)
+
+train = sample(1:nrow(drug_use_subset),1500) 
+drug.train = drug_use_subset[train,]
+drug.test= drug_use_subset[-train,]
+a=sample(1:nrow(drug_use_subset),1500) 
+svmfit <- svm(drug.train$recent_cannabis_use~., data = drug.train, kernel = "radial", cost = 1)
+svm.pred = predict(svmfit, newdata = drug.test)
+table(Prediction = svm.pred, Truth = drug.test$recent_cannabis_use)
+```
+
+#b
+```{r}
+set.seed(1)
+tune.out = tune(svm, recent_cannabis_use~., data = drug_use_subset, kernel = "radial", ranges = list(cost=c(0.001, 0.01, 0.1, 1,10,100)))
+summary(tune.out)
+```
+
+We see that cost=0.1 results in the lowest cross-validation error rate 0.1819. 
+
+```{r}
+bestmod = tune.out$best.model
+summary(bestmod)
+```
+
+```{r}
+svmfit2 <- svm(drug.train$recent_cannabis_use~., data = drug.train, kernel = "radial", cost = 0.1)
+svm.pred = predict(svmfit2, newdata = drug.test)
+ypred = predict(svmfit2, drug.train)
+table(predict = ypred, truth = drug.train$recent_cannabis_use)
+```
+
+

@@ -1,0 +1,329 @@
+---
+title: "PSTAT131 LAB1"
+author: "Zhongyun Zhang 5559158, Zhengyao Lu 6094270"
+date: "10/20/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Problem1 
+#a)
+```{r}
+library(readr)
+library(tidyverse)
+#install.packages("ISLR")
+#install.packages("ggplot2")
+#install.packages("plyr")
+#install.packages("dplyr")
+#install.packages("class")
+#Load libraries
+library(ISLR) 
+library(ggplot2) 
+library(reshape2) 
+library(plyr) 
+library(readr)
+library(dplyr) 
+library(class)
+algae <- read_table2("algaeBloom.txt", col_names=
+                      c('season','size','speed','mxPH','mnO2','Cl','NO3','NH4','oPO4','PO4','Chla',
+                     'a1','a2','a3','a4','a5','a6','a7'),
+                     na="XXXXXXX")
+glimpse(algae)
+```
+
+```{r}
+algae%>% 
+  dplyr::group_by(season)%>% 
+  dplyr::summarise(n=n())
+```
+
+The number of observations for autumn, spring, summer, winter are 40,53,45, and 62 respectively. 
+
+#b
+```{r}
+sum(is.na(algae))
+
+algae %>%
+summarise(avg = mean(mxPH, na.rm=TRUE),var=(sd(mxPH,na.rm=TRUE))^2)
+algae %>%
+summarise(avg = mean(mnO2, na.rm=TRUE),var=(sd(mnO2,na.rm=TRUE))^2)
+algae %>%
+summarise(avg = mean(Cl, na.rm=TRUE),var=(sd(Cl,na.rm=TRUE))^2)
+algae %>%
+summarise(avg = mean(NO3, na.rm=TRUE),var=(sd(NO3,na.rm=TRUE))^2)
+algae %>%
+summarise(avg = mean(NH4, na.rm=TRUE),var=(sd(NH4,na.rm=TRUE))^2)
+algae %>%
+summarise(avg = mean(oPO4, na.rm=TRUE),var=(sd(oPO4,na.rm=TRUE))^2)
+algae %>%
+summarise(avg = mean(PO4, na.rm=TRUE),var=(sd(PO4,na.rm=TRUE))^2)
+algae %>%
+summarise(avg = mean(Chla, na.rm=TRUE),var=(sd(Chla,na.rm=TRUE))^2)
+```
+
+There are missing values. Since I need to use na.rm to remove missing data, otherwise I will get NA for each calculation.
+As we can see from the output, mean different chemicals differ significantly. This may beacuse of different scales used for chemicals.NH4 and PO4 have greater scale. Also, chemicals with larger means have larger variance. However, NO3 has the smallest mean but a relatively large variance, meaning that the data in NO3 is more scattered.
+
+#c
+```{r}
+#Medians and MAD
+algae %>%
+summarise(med = median(mnO2, na.rm=TRUE),MAD=median(abs(mnO2-median(mnO2,na.rm=TRUE)),na.rm=TRUE))
+algae %>%
+summarise(med = median(Cl, na.rm=TRUE),MAD=median(abs(Cl-median(Cl,na.rm=TRUE)),na.rm=TRUE))
+algae %>%
+summarise(med = median(NO3, na.rm=TRUE),MAD=median(abs(NO3-median(NO3,na.rm=TRUE)),na.rm=TRUE))
+algae %>%
+summarise(med = median(NH4, na.rm=TRUE),MAD=median(abs(NH4-median(NH4,na.rm=TRUE)),na.rm=TRUE))
+algae %>%
+summarise(med = median(oPO4, na.rm=TRUE),MAD=median(abs(oPO4-median(oPO4,na.rm=TRUE)),na.rm=TRUE))
+algae %>%
+summarise(med = median(PO4, na.rm=TRUE),MAD=median(abs(PO4-median(PO4,na.rm=TRUE)),na.rm=TRUE))
+algae %>%
+summarise(med = median(Chla, na.rm=TRUE),MAD=median(abs(Chla-median(Chla,na.rm=TRUE)),na.rm=TRUE))
+```
+
+The medians, compared to the means, are similar (little bit smaller than mean); and the MADs are much smaller than the variances.
+
+##Problem2
+#a
+```{r}
+ggplot(algae, aes(algae$mxPH)) + geom_histogram(aes(y = ..density..)) +ggtitle("Histogram of mxPH")
+```
+
+As we can see from the graph, the distribution is slightly skewed to the left.
+
+#b
+```{r}
+ggplot(algae, aes(algae$mxPH)) + geom_histogram(aes(y = ..density..)) +ggtitle("Histogram of mxPH")+geom_density()+geom_rug()
+```
+
+#c
+```{r}
+#boxplot(algae$a1~algae$size,main=" ???A conditioned Boxplot of Algal a1??? ")
+#ggplot(algae,aes(algae$size))+geom_boxplot() +ggtitle("A conditioned Boxplot of Algal a1")
+ggplot(algae, aes(algae$size,algae$a1)) + geom_boxplot() +ggtitle("A conditioned Boxplot of Algal a1")  + facet_wrap(~ size)
+```
+
+#d
+```{r}
+#boxplot(algae$NO3 ~ algae$size, main = "A conditional BoxPlot of Algae NO3")
+#boxplot(algae$NH4 ~ algae$size, main = "A conditional BoxPlot of Algae NH4")
+plot_NO3 <- boxplot(algae$NO3, main = "NO3",col="red")
+length(plot_NO3$out)
+plot_NH4 <- boxplot(algae$NH4, main = "NH4",col="red")
+length(plot_NH4$out)
+boxplot.stats(algae$NO3)$out
+boxplot.stats(algae$NH4)$out
+```
+
+There are outlier's for both since we see them in the boxplot, they are 1.5 distance away from the quantiles. It is hard to visualize in the boxplot graph. Therefore, from the outlier check, we can see that there are 5 outliers in NO3, and 27 outliers in NH4.
+
+#e
+mean of NO3 was 3.28 and NH4 is 501.3 and variance was 14.26 and 3851585 
+Medians are 2.67 and 103.16 and MAD are 2.17 and 111.675
+
+Outliers are defined as having higher variance from the rest of the data points. The computation of the mean and variance take outliers into account, thus it is possible to take them as outliers. Therefore, the mean and variance have weak resistance to outliers and are not sufficient estimators. In addition, MAD and median are better estimators because they are less sensitive to outliers, and MAD is a more robust estimator than the sample variance and mean in the presence of outliers. In this way it explain for the means and variances of NO3 and NH4 are so different from their respective medians and MADs. The chemicals' means and variances values are affected by outlier, and their medians and MADs are better estimators for these chemicals.
+
+##Problem 3
+#a
+```{r}
+sum(complete.cases(algae)==FALSE)
+colSums(is.na(algae))
+```
+a)There are 16 total observations that has missing values
+b)mxPH contains 1 missing value, 
+mn02 contains 2 missing values, 
+Cl contains 10 missing values, 
+NO3 contains 2 missing values, 
+NH4 contains 2 missing values,
+oPo4 contains 2 missing values, 
+Po4 contains 2 missing values, 
+Chla contains 12 missing values.
+
+#b
+```{r}
+algae.del <- algae%>%filter(complete.cases(.))
+print(paste('There are', count(algae.del),'observations in algae.del.'))
+```
+
+There are 184 observations in algae.del.
+
+#c)
+```{r}
+algae.med<-algae%>% mutate_at(vars(mxPH,mnO2,Cl,NO3,NH4,oPO4,PO4,Chla),funs(ifelse(is.na(.),median(., na.rm=TRUE),.)))
+print(paste('There are', count(algae.med),'observations in algae.med.'))
+algae.med[48,4:11]
+algae.med[62,4:11]
+algae.med[199,4:11]
+```
+
+There are 200 observations
+
+#d
+```{r}
+#algae.med1<-algae.med %>% select(-season)%>% select(-size)%>% select(-speed)
+#algae.med1
+#cor_algae=cor((algae.med1),use = "pairwise.complete.obs")
+#prediction <- predict(lm(PO4~oPO4, data = algae.med))
+#prediction[28]
+cor(algae.del%>%select(mxPH:Chla))
+model<-lm(algae$PO4~algae$oPO4) 
+x<-predict(model,algae[28,9])[28]
+x
+algae[28,10]<-x
+
+```
+
+48.06929 is our value for the 28th observation
+
+#e
+It is possible that chemical abundance profile is related to the missing of some algae, and the chemical abundance profile of algae that survive in samples is possible to be different than the chemical abundance profile of missing algae. This difference in chemical abundance profile between missing and non-missing algae may contributes to survivorship bias, which imputed values might be a poor substitude, also we may loss information about algae boom.
+
+
+##Problem4
+#a
+```{r}
+set.seed(666)
+folds = sample(cut(1:nrow(algae.med), breaks=5, labels=FALSE))
+folds
+```
+
+
+```{r}
+do.chunk <- function(chunkid, chunkdef, dat){ # function argument 
+  train = (chunkdef != chunkid)
+  Xtr = dat[train,1:11] # get training set
+  Ytr = dat[train,12] # get true response values in trainig set 
+  Xvl = dat[!train,1:11] # get validation set
+  Yvl = dat[!train,12] # get true response values in validation set 
+  lm.a1 <- lm(a1~., data = dat[train,1:12])
+predYtr = predict(lm.a1) # predict training values
+predYvl = predict(lm.a1,Xvl) # predict validation values 
+data.frame(fold = chunkid,
+           train.error = mean((predYtr - Ytr$a1)^2), 
+           val.error = mean((predYvl - Yvl$a1)^2))
+ } 
+lapply(c(1:5),do.chunk,chunkdef=folds,dat=algae.med)
+```
+
+
+##Problem5
+```{r}
+algae.Test <- read_table2('algaeTest.txt', col_names=c('season','size','speed','mxPH','mnO2','Cl','NO3',
+'NH4','oPO4','PO4','Chla','a1'), na=c('XXXXXXX'))
+Xtrain=algae.med[,1:11] 
+Ytrain=algae.med[,12] 
+Xval=algae.Test[,1:11] 
+Yval=algae.Test[,12]
+fit<-lm(a1~.,data=algae.med[,1:12]) 
+predYtrain=predict(fit) 
+predYval=predict(fit,Xval)
+train.error=mean(((predYtrain - Ytrain)^2)$a1) 
+test.error=mean(((predYval - Yval)^2)$a1)
+data.frame(train.error, test.error)
+a=(284.9137+290.9481+274.9146+253.3843+296.4739)/5
+a
+b=(310.8238+288.1278+389.9608+453.7588+289.3328)/5
+b
+```
+The test error from problem 4 is 453.7588 , which is larger than the ???true??? test error in problem 5. This is not what i expected for most cases, the ???true??? test error should be larger.
+
+
+##Problem6
+#a
+```{r}
+library(ISLR)
+head(Wage)
+ggplot(Wage, aes(Wage$age,Wage$wage)) + geom_point()+geom_smooth()
+```
+This pattern looks like an inverse parabola. The wage is lowest smaller than 20, it increases as age is increasing until
+40, then it becomes relatively steady. From 60 to 80, it???s decreasing, and i believe it???s because most people are retired around that age.
+As we can see, the wage is lowest at smaller than 20, and it increases as age until it reaches 40. Then, it becomes quite steady from 40 to 60. After 60, it gradually decreases until age of 80. I belive most people retired around 65.
+
+#b i)
+```{r}
+for(p in 10){ if(p==0){
+m1=lm(wage~1,data=Wage)
+print(m1) }
+else{
+mp = lm(wage~poly(age,degree=p,raw=FALSE),data=Wage)
+print(mp)
+} }
+```
+ii)
+```{r}
+set.seed(333)
+folds = sample(cut(1:nrow(Wage), breaks=5, labels=FALSE))
+do.chunk2 <- function(chunkid, chunkdef, dat,p){ # function argument
+train = (chunkdef != chunkid)
+Xtr = dat[train,2] # get training set
+Ytr = dat[train,11] # get true response values in trainig set
+Xvl = dat[!train,2] # get validation set
+Yvl = dat[!train,11] # get true response values in validation set
+if(p==0){ fit<-lm(wage~1,data=dat[train,c(2,11)])} else{
+fit<-lm(wage~poly(age,degree=p,raw=FALSE),data=dat[train,c(2,11)]) }
+predYtr = predict(fit) # predict training values
+predYvl = predict(fit,data.frame(age=Xvl)) # predict validation values
+data.frame(fold = chunkid,
+train.error = mean((predYtr - Ytr)^2), val.error = mean((predYvl - Yvl)^2))
+}
+r1<-ldply(1:5,do.chunk2,folds,Wage,0) 
+r1
+r2<-ldply(1:5,do.chunk2,folds,Wage,1) 
+r2
+r3<-ldply(1:5,do.chunk2,folds,Wage,2) 
+r3
+r4<-ldply(1:5,do.chunk2,folds,Wage,3) 
+r4
+r5<-ldply(1:5,do.chunk2,folds,Wage,4)
+r5
+r6<-ldply(1:5,do.chunk2,folds,Wage,5) 
+r6
+r7<-ldply(1:5,do.chunk2,folds,Wage,6)
+r7
+r8<-ldply(1:5,do.chunk2,folds,Wage,7) 
+r8
+r9<-ldply(1:5,do.chunk2,folds,Wage,8) 
+r9
+r10<-ldply(1:5,do.chunk2,folds,Wage,9) 
+r10
+r11<-ldply(1:5,do.chunk2,folds,Wage,10) 
+r11
+```
+
+
+#c
+```{r}
+x<-1:11
+y1<- c(mean(r1$train.error),mean(r2$train.error),mean(r3$train.error),mean(r4$train.error),mean(r5$train.error),mean(r6$train.error),mean(r7$train.error),mean( r8$train.error),mean(r9$train.error),mean(r10$train.error),mean(r11$train.error))
+y2<- c(mean(r1$val.error),mean(r2$val.error),mean(r3$val.error),mean(r4$val.error) ,mean(r5$val.error),mean(r6$val.error),mean(r7$val.error),mean(r8$val.error), mean(r9$val.error),mean(r10$val.error),mean(r11$val.error))
+plot(0:10, y1,main = "errors vs. p", xlab = "p", ylab=" errors")
+lines(0:10, y1,col="red")
+points(0:10,y2,pch=1)
+lines(0:10,y2,col="green")
+legend(7.5, 1740, legend=c("train errors", "test errors"),
+col=c("red", "blue"), lty=1:2, cex=0.8)
+```
+
+From the graph, we can see after p=2 the test error change slightly, so we should choose p=2, it means meaning wage~1+age+I(age??2).
+
+
+
+
+
+
+
+
+
+
+
+
+
+

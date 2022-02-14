@@ -1,0 +1,213 @@
+---
+title: "pstat131 hw2"
+author: "zhongyun zhang"
+date: "11/2/2020"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(readr)
+library(tree)
+library(plyr)
+library(class)
+library(rpart)
+library(maptree)
+library(ROCR)
+library(reshape2)
+spam <- read_table2("spambase.tab", guess_max=2000) 
+spam <- spam %>%
+  mutate(y = factor(y, levels=c(0,1), labels=c("good", "spam"))) %>%
+  mutate_at(.vars=vars(-y), .funs=scale)
+#View(spam)
+```
+
+```{r}
+calc_error_rate <- function(predicted.value, true.value){
+return(mean(true.value!=predicted.value))}
+
+records = matrix(NA, nrow=3, ncol=2) 
+colnames(records) <- c("train.error","test.error") 
+rownames(records) <- c("knn","tree","logistic")
+
+set.seed(1)
+test.indices = sample(1:nrow(spam), 1000) 
+spam.train=spam[-test.indices,] 
+spam.test=spam[test.indices,]
+
+nfold = 10
+set.seed(1)
+folds = seq.int(nrow(spam.train)) %>%      # sequential obs ids
+  cut(breaks = nfold, labels = FALSE) %>%  # sequential fold ids
+  sample                                   # random fold ids
+```
+
+##Problem1
+
+```{r}
+do.chunk <- function(chunkid, folddef, Xdat, Ydat, k){ 
+  train = (folddef!=chunkid)
+  Xtr = Xdat[train,]
+  Ytr = Ydat[train]
+  Xvl = Xdat[!train,] 
+  Yvl = Ydat[!train]
+
+predYtr = knn(train = Xtr, test = Xtr, cl = Ytr, k = k)
+predYvl = knn(train = Xtr, test = Xvl, cl = Ytr, k = k)
+data.frame(train.error = calc_error_rate(predYtr, Ytr), val.error = calc_error_rate(predYvl, Yvl))
+}
+
+
+XTrain = spam.train %>% select(-y)
+YTrain = spam.train$y
+
+kvec <- c(1, seq(10, 50, length.out = 5))
+
+error.folds <- NULL
+for (i in kvec) {
+  temp <- ldply(c(1:10), do.chunk, folddef = folds, Xdat = XTrain, Ydat = YTrain, k = i)
+  temp$k <- i
+  error.folds <- rbind.data.frame(error.folds, temp) 
+}
+
+
+val.error.mean <- error.folds %>%
+    group_by(k) %>%
+    summarise_each(funs(mean), val.error)
+
+best.kfold <- val.error.mean$k[which.min(val.error.mean$val.error)]
+best.kfold  # the answer is 10 
+```
+
+
+
+##Problem2
+
+```{r}
+# split test set and factor on true classification
+XTest = spam.test %>% select(-y)
+YTest = spam.test$y
+
+pred.YTtrain <- knn(train = XTrain, test = XTrain, cl = YTrain, k = best.kfold)
+knn_train_error <- calc_error_rate(pred.YTtrain, YTrain)
+knn_train_error
+
+pred.YTest = knn(train = XTrain, test = XTest, cl = YTrain, k = best.kfold)
+knn_test_error <- calc_error_rate(pred.YTest, YTest)
+knn_test_error
+
+records[1,] <- c(knn_train_error, knn_test_error)
+records
+```
+
+
+##Problem3
+
+```{r}
+spamtree <- tree(y~.,data=spam.train,
+                  control = tree.control(nobs=nrow(spam.train),
+                  minsize = 5,
+                  mindev = 1e-5))
+summary(spamtree)
+plot(spamtree)
+title("Tree Train")
+text(spamtree, pretty = 0, cex = .7, col = "blue")
+```
+There are 149 nodes and the misclassification error rate is 49/3601. There are 49 of the training observations are misclassified.
+
+##Problem4
+
+```{r pruned}
+set.seed(1)
+tree.prune<-prune.tree(spamtree, best = 11)
+draw.tree(tree.prune, nodeinfo=TRUE,, cex=0.4)
+text(tree.prune, pretty = 0)
+title("Pruned Tree")
+```
+
+
+##Problem5
+```{r}
+set.seed(1)
+cv_tree <- cv.tree(spamtree, rand=folds,FUN=prune.misclass, K = 10)
+cv_tree
+plot(cv_tree$dev~cv_tree$size, type = "b", xlab = "Tree Size", ylab = "missclassification", main = "Misclassification vs Tree Size",col="blue")
+best.size.cv= cv_tree$size[which.min(cv_tree$dev)]
+best.size.cv
+
+cvtreedf<-cbind(cv_tree[["dev"]],cv_tree[["size"]])
+cvtreedf=as.data.frame(cvtreedf)
+highlight_df<-cvtreedf%>%filter(V2==best.size.cv)
+ggplot(cvtreedf,aes(x=V2,y=V1))+geom_point(alpha=0.3)+geom_point(data=highlight_df,aes(x=V2,y=V1),color="red")
+```
+
+Best tree size is 22, by counting by myself. Since we need to choose the lowest dev with smallest size.
+
+##Problem6
+
+```{r}
+spamtree.pruned <- prune.tree(spamtree, best = 22, method = "misclass")
+summary(spamtree.pruned)
+draw.tree(spamtree.pruned, nodeinfo = TRUE, cex = 0.3)
+
+spamtree.train <- predict(spamtree.pruned, type = "class")  
+
+tree_train_error <- calc_error_rate(spamtree.train, YTrain) 
+tree_train_error
+
+
+spamtree.test <- predict(spamtree.pruned, spam.test, type = "class")
+
+tree_test_error <- calc_error_rate(spamtree.test, YTest)
+tree_test_error
+
+records[2,] <- c(tree_train_error, tree_test_error)
+records
+```
+
+##Problem8
+
+```{r}
+set.seed(1)
+glm.fit <- glm(y ~ ., family = binomial('logit'), data = spam.train)
+
+prob.training <- predict(glm.fit, type="response")
+#round(prob.training,digits=2)
+
+spam.train2 <- spam.train %>%
+  mutate(predSpam = as.factor(ifelse(prob.training <= 0.5, "good", "spam")))
+
+spam.train.table <- table(pred = spam.train2$predSpam, true = spam.train2$y)
+logit_train_error <- (spam.train.table[1,2] + spam.train.table[2,1]) / nrow(spam.train)
+logit_train_error  # error
+
+prob.test <- predict(glm.fit, newdata = spam.test, type="response")
+
+spam.test2 <- spam.test %>%
+  mutate(predSpam = as.factor(ifelse(prob.test <= 0.5, "Good", "Spam")))
+
+spam.test.table <- table(pred = spam.test2$predSpam, true = spam.test2$y)
+logit_test_error <- (spam.test.table[1,2] + spam.test.table[2,1]) / nrow(spam.test)
+logit_test_error  # error
+
+records[3,] <- c(logit_train_error, logit_test_error)
+records
+```
+The logistic method has the lowest misclassification on the test set.
+
+##Problem9
+If I am the designer of a spam filter, I will concentrate more about he potential for false positive rate that are too large.
+A true positive is an outcome where the model correctly predicts the positive class, which may have smaller impact to the result of misclassification. Since a small true positive rate means there are small number of correct/useful emails.
+A false positive is an outcome where the model incorrectly predicts the positive class. if the false positive rate is too large, it means that we had misclassified many useful emails as spam. This may lead users miss many important emails, which will cause bigger problem.
+
+
+
+
